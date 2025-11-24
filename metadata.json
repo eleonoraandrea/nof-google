@@ -1,0 +1,5 @@
+{
+  "name": "NeuroLiquid AI Trader",
+  "description": "An autonomous crypto trading agent dashboard simulating Hyperliquid execution. Features AI-driven sentiment analysis, technical indicators, dynamic basket configuration, and Supabase integration for trade journaling.",
+  "requestFramePermissions": []
+}
