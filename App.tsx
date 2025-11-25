@@ -446,128 +446,129 @@ const App: React.FC = () => {
         const currentPortfolio = portfolioRef.current;
         const currentConfig = configRef.current;
         
-        // 1. Save System Status to DB every cycle
-        await saveSystemStatus(
-            currentPortfolio, 
-            currentActiveTrades.length, 
-            fearIndexRef.current, 
-            currentConfig
-        );
+        try {
+            // 1. Save System Status to DB every cycle
+            await saveSystemStatus(
+                currentPortfolio, 
+                currentActiveTrades.length, 
+                fearIndexRef.current, 
+                currentConfig
+            );
 
-        // Daily (or periodic) Performance Report to Telegram
-        if (Math.random() < 0.005) { // Occasional report
-             const report = formatPerformanceReport(currentPortfolio, tradeHistoryRef.current);
-             sendTelegramMessage(report, currentConfig);
-        }
-
-        const candidateAssets = currentConfig.assets;
-        if (candidateAssets.length === 0) return;
-        
-        // Analyze a random asset from the basket
-        const assetToAnalyze = candidateAssets[Math.floor(Math.random() * candidateAssets.length)];
-        const existingTrade = currentActiveTrades.find(t => t.asset === assetToAnalyze);
-        
-        // Manage Existing Trade
-        if (existingTrade) {
-            const netPnl = existingTrade.pnl || 0;
-            const positionValue = existingTrade.size * existingTrade.leverage;
-            const pnlRatio = positionValue > 0 ? netPnl / positionValue : 0;
-                 
-             if (pnlRatio <= -currentConfig.stopLossPct) {
-                closeTrade(existingTrade, "Stop Loss");
-             } else if (pnlRatio >= currentConfig.takeProfitPct) {
-                closeTrade(existingTrade, "Take Profit");
-             }
-            return;
-        }
-
-        // Analyze New Entry
-        setIsAnalyzing(true);
-        setLastAnalysis(`Scanning ${assetToAnalyze}...`);
-
-        const data = currentMarketData[assetToAnalyze];
-        if (!data || data.price === 0) {
-            setIsAnalyzing(false);
-            return;
-        }
-
-        const result = await analyzeMarket(
-            data, 
-            newsRef.current, 
-            fearIndexRef.current, 
-            tradeHistoryRef.current, 
-            currentPortfolio.equity,
-            currentConfig
-        );
-
-        setLastAnalysis(`${result.decision} ${assetToAnalyze} (${result.confidence}%)`);
-
-        if (result.decision !== TradeSide.WAIT && result.confidence > 75) {
-            const size = currentPortfolio.balance * currentConfig.riskPerTrade;
-            
-            // Re-check existing trades to prevent race condition double-entry
-            if (activeTradesRef.current.some(t => t.asset === assetToAnalyze)) {
-                 setIsAnalyzing(false);
-                 return;
+            // Daily (or periodic) Performance Report to Telegram
+            if (Math.random() < 0.005) { // Occasional report
+                const report = formatPerformanceReport(currentPortfolio, tradeHistoryRef.current);
+                sendTelegramMessage(report, currentConfig);
             }
 
-            if (currentPortfolio.availableMargin < size) {
-                setLastAnalysis("Insufficient Margin");
-                setIsAnalyzing(false);
+            const candidateAssets = currentConfig.assets;
+            if (candidateAssets.length === 0) return;
+            
+            // Analyze a random asset from the basket
+            const assetToAnalyze = candidateAssets[Math.floor(Math.random() * candidateAssets.length)];
+            const existingTrade = currentActiveTrades.find(t => t.asset === assetToAnalyze);
+            
+            // Manage Existing Trade
+            if (existingTrade) {
+                const netPnl = existingTrade.pnl || 0;
+                const positionValue = existingTrade.size * existingTrade.leverage;
+                const pnlRatio = positionValue > 0 ? netPnl / positionValue : 0;
+                    
+                if (pnlRatio <= -currentConfig.stopLossPct) {
+                    closeTrade(existingTrade, "Stop Loss");
+                } else if (pnlRatio >= currentConfig.takeProfitPct) {
+                    closeTrade(existingTrade, "Take Profit");
+                }
                 return;
             }
 
-            const recentNews = newsRef.current.slice(0, 3);
-            const avgNewsScore = recentNews.length > 0 
-                ? recentNews.reduce((acc, n) => acc + (n.score || 0), 0) / recentNews.length 
-                : 0;
+            // Analyze New Entry
+            setIsAnalyzing(true);
+            setLastAnalysis(`Scanning ${assetToAnalyze}...`);
 
-            const newTrade: Trade = {
-                id: Math.random().toString(36).substring(2, 11),
-                asset: assetToAnalyze,
-                entryPrice: data.price,
-                side: result.decision,
-                size: size,
-                leverage: Math.min(result.leverage, 5),
-                timestamp: Date.now(),
-                status: 'OPEN',
-                reasoning: result.reasoning,
-                aiConfidence: result.confidence,
-                pnl: -(size * result.leverage * TRADING_FEE_RATE), 
-                fees: size * result.leverage * TRADING_FEE_RATE, 
-                marketSnapshot: {
-                    rsi: data.rsi,
-                    fearIndex: fearIndexRef.current,
-                    newsScore: avgNewsScore
-                }
-            };
-
-            // REAL EXECUTION LOGIC PLACEHOLDER
-            if (currentConfig.executionMode === 'REAL') {
-                if (!currentConfig.walletPrivateKey) {
-                    setLastAnalysis("ABORTED: Real mode requires private key");
-                    setIsAnalyzing(false);
-                    return;
-                }
-                console.log("!!! REAL ORDER EXECUTION TRIGGERED !!!");
-                console.log(`Payload: ${newTrade.side} ${newTrade.size} USD on ${newTrade.asset}`);
+            const data = currentMarketData[assetToAnalyze];
+            if (!data || data.price === 0) {
+                return;
             }
 
-            setActiveTrades(prev => [...prev, newTrade]);
-            setPortfolio(prev => ({
-                ...prev,
-                availableMargin: prev.availableMargin - size
-            }));
-            
-            // Save Reasoning and Trade to DB
-            logTrade(newTrade);
-            
-            // Notify Telegram
-            const msg = formatTradeMessage(newTrade);
-            sendTelegramMessage(msg, currentConfig);
-        }
+            const result = await analyzeMarket(
+                data, 
+                newsRef.current, 
+                fearIndexRef.current, 
+                tradeHistoryRef.current, 
+                currentPortfolio.equity,
+                currentConfig
+            );
 
-        setIsAnalyzing(false);
+            setLastAnalysis(`${result.decision} ${assetToAnalyze} (${result.confidence}%)`);
+
+            if (result.decision !== TradeSide.WAIT && result.confidence > 75) {
+                const size = currentPortfolio.balance * currentConfig.riskPerTrade;
+                
+                // Re-check existing trades to prevent race condition double-entry
+                if (activeTradesRef.current.some(t => t.asset === assetToAnalyze)) {
+                    return;
+                }
+
+                if (currentPortfolio.availableMargin < size) {
+                    setLastAnalysis("Insufficient Margin");
+                    return;
+                }
+
+                const recentNews = newsRef.current.slice(0, 3);
+                const avgNewsScore = recentNews.length > 0 
+                    ? recentNews.reduce((acc, n) => acc + (n.score || 0), 0) / recentNews.length 
+                    : 0;
+
+                const newTrade: Trade = {
+                    id: Math.random().toString(36).substring(2, 11),
+                    asset: assetToAnalyze,
+                    entryPrice: data.price,
+                    side: result.decision,
+                    size: size,
+                    leverage: Math.min(result.leverage, 5),
+                    timestamp: Date.now(),
+                    status: 'OPEN',
+                    reasoning: result.reasoning,
+                    aiConfidence: result.confidence,
+                    pnl: -(size * result.leverage * TRADING_FEE_RATE), 
+                    fees: size * result.leverage * TRADING_FEE_RATE, 
+                    marketSnapshot: {
+                        rsi: data.rsi,
+                        fearIndex: fearIndexRef.current,
+                        newsScore: avgNewsScore
+                    }
+                };
+
+                // REAL EXECUTION LOGIC PLACEHOLDER
+                if (currentConfig.executionMode === 'REAL') {
+                    if (!currentConfig.walletPrivateKey) {
+                        setLastAnalysis("ABORTED: Real mode requires private key");
+                        return;
+                    }
+                    console.log("!!! REAL ORDER EXECUTION TRIGGERED !!!");
+                    console.log(`Payload: ${newTrade.side} ${newTrade.size} USD on ${newTrade.asset}`);
+                }
+
+                setActiveTrades(prev => [...prev, newTrade]);
+                setPortfolio(prev => ({
+                    ...prev,
+                    availableMargin: prev.availableMargin - size
+                }));
+                
+                // Save Reasoning and Trade to DB
+                logTrade(newTrade);
+                
+                // Notify Telegram
+                const msg = formatTradeMessage(newTrade);
+                sendTelegramMessage(msg, currentConfig);
+            }
+        } catch (e: any) {
+            console.error("AI Loop Error:", e);
+            setLastAnalysis(`AI Error: ${e.message || 'Unknown'}`);
+        } finally {
+            setIsAnalyzing(false);
+        }
     }, [isRunning, isAnalyzing, closeTrade]);
 
     // Setup AI Interval with Dynamic Configuration

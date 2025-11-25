@@ -108,6 +108,12 @@ const fetchOpenAICompatible = async (
     userPrompt: string,
     jsonMode: boolean = true
 ): Promise<any> => {
+    
+    // Mixed Content / CORS Check for Localhost
+    if (typeof window !== 'undefined' && window.location.protocol === 'https:' && url.startsWith('http:')) {
+         console.warn("Security Warning: Attempting to call HTTP endpoint (Localhost) from HTTPS. This will likely fail due to Mixed Content restrictions. Ensure Ollama is served via HTTPS or use a tunneling service.");
+    }
+
     try {
         const response = await fetch(url, {
             method: 'POST',
@@ -144,10 +150,25 @@ const fetchOpenAICompatible = async (
         const jsonStr = content.replace(/```json\n?|\n?```/g, '').trim();
         return JSON.parse(jsonStr);
 
-    } catch (e) {
+    } catch (e: any) {
         console.error("Fetch OpenAI-compatible failed", e);
+        if (e.message === 'Failed to fetch') {
+             throw new Error("Network/CORS Error: API Unreachable. Check URL and Origin policies.");
+        }
         throw e;
     }
+};
+
+// Helper to handle fetch errors gracefully
+const handleFetchError = (e: any, provider: string): AIAnalysisResult => {
+    console.error(`${provider} API Error:`, e);
+    let reason = `${provider} Error`;
+    if (e.message?.includes('Failed to fetch') || e.message?.includes('Network/CORS')) {
+        reason = `${provider} Unreachable (CORS/Network)`;
+    } else if (e.message) {
+        reason = `${provider}: ${e.message.substring(0, 30)}...`;
+    }
+    return { decision: TradeSide.WAIT, leverage: 1, confidence: 0, reasoning: reason };
 };
 
 // --- Public Methods ---
@@ -261,26 +282,34 @@ export const analyzeMarket = async (
   // --- OPENROUTER PROVIDER ---
   if (config.aiProvider === 'OPENROUTER') {
       if (!config.openRouterApiKey) return { decision: TradeSide.WAIT, leverage: 1, confidence: 0, reasoning: "OpenRouter Key Missing" };
-      return fetchOpenAICompatible(
-          'https://openrouter.ai/api/v1/chat/completions',
-          config.openRouterModel || 'deepseek/deepseek-r1',
-          config.openRouterApiKey,
-          systemPrompt,
-          userPrompt
-      );
+      try {
+          return await fetchOpenAICompatible(
+              'https://openrouter.ai/api/v1/chat/completions',
+              config.openRouterModel || 'deepseek/deepseek-r1',
+              config.openRouterApiKey,
+              systemPrompt,
+              userPrompt
+          );
+      } catch (e) {
+          return handleFetchError(e, 'OpenRouter');
+      }
   }
 
   // --- OLLAMA PROVIDER ---
   if (config.aiProvider === 'OLLAMA') {
       const baseUrl = config.ollamaBaseUrl || 'http://localhost:11434';
       const url = `${baseUrl.replace(/\/$/, '')}/v1/chat/completions`;
-      return fetchOpenAICompatible(
-          url,
-          config.ollamaModel || 'llama3',
-          'ollama',
-          systemPrompt,
-          userPrompt
-      );
+      try {
+        return await fetchOpenAICompatible(
+            url,
+            config.ollamaModel || 'llama3',
+            'ollama',
+            systemPrompt,
+            userPrompt
+        );
+      } catch (e) {
+        return handleFetchError(e, 'Ollama');
+      }
   }
 
   // --- GEMINI PROVIDER (Default) ---
@@ -311,7 +340,7 @@ export const analyzeMarket = async (
          console.error("Gemini Error:", e);
          // Fallback
          if (e.status === 429) return { decision: TradeSide.WAIT, leverage: 1, confidence: 0, reasoning: "Gemini Quota Exceeded" };
-         throw e;
+         return handleFetchError(e, 'Gemini');
       }
   }
 
