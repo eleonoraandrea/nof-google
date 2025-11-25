@@ -1,3 +1,4 @@
+
 export enum TradeSide {
   LONG = 'LONG',
   SHORT = 'SHORT',
@@ -18,10 +19,10 @@ export interface OrderBook {
 }
 
 export interface MarketData {
-  asset: string; // Changed from AssetName to string
+  asset: string;
   price: number;
   change24h: number;
-  rsi: number; // Mock technical indicator
+  rsi: number;
   volume: number;
   high24h: number;
   low24h: number;
@@ -29,24 +30,35 @@ export interface MarketData {
 }
 
 export interface TradeConfig {
-  assets: string[]; // Changed from AssetName[] to string[]
-  maxLeverage: number; // Max 5x
-  riskPerTrade: number; // % of portfolio
+  assets: string[];
+  maxLeverage: number;
+  riskPerTrade: number;
   stopLossPct: number;
   takeProfitPct: number;
   aiModel: string;
+  analysisIntervalMins: number; // New setting
+  
+  // Telegram Configuration
+  telegramBotToken?: string;
+  telegramChatId?: string;
+  notificationsEnabled: boolean;
+
+  // Real Trading Configuration
+  executionMode: 'SIMULATION' | 'REAL';
+  walletPrivateKey?: string;
+  walletAddress?: string;
 }
 
 export interface Trade {
   id: string;
-  asset: string; // Changed from AssetName to string
+  asset: string;
   entryPrice: number;
   exitPrice?: number;
   side: TradeSide;
-  size: number; // In USD (Margin)
+  size: number;
   leverage: number;
-  pnl?: number; // Net PnL (after fees)
-  fees?: number; // Total fees paid/estimated
+  pnl?: number;
+  fees?: number;
   timestamp: number;
   status: 'OPEN' | 'CLOSED';
   reasoning: string;
@@ -62,7 +74,7 @@ export interface NewsItem {
   id: string;
   headline: string;
   sentiment: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
-  score?: number; // -1 (Bearish) to 1 (Bullish)
+  score?: number;
   timestamp: number;
   source: string;
 }
@@ -83,7 +95,7 @@ export interface AIAnalysisResult {
 }
 
 export interface Candle {
-    time: number; // Unix timestamp in seconds for lightweight-charts
+    time: number;
     open: number;
     high: number;
     low: number;

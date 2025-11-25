@@ -9,7 +9,7 @@ import {
   Tooltip, 
   ResponsiveContainer 
 } from 'recharts';
-import { Activity, DollarSign, Target } from 'lucide-react';
+import { Activity, DollarSign, Target, TrendingDown, Divide } from 'lucide-react';
 
 interface Props {
   trades: Trade[];
@@ -25,12 +25,28 @@ const PerformanceChart: React.FC<Props> = ({ trades }) => {
     let cumulative = 0;
     let wins = 0;
     let totalPnl = 0;
+    let peakEquity = 0;
+    let maxDrawdown = 0;
+    let grossProfit = 0;
+    let grossLoss = 0;
 
     const chartData = closedTrades.map(t => {
       const pnl = t.pnl || 0;
       cumulative += pnl;
       totalPnl += pnl;
-      if (pnl > 0) wins++;
+      
+      if (pnl > 0) {
+          wins++;
+          grossProfit += pnl;
+      } else {
+          grossLoss += Math.abs(pnl);
+      }
+
+      // Drawdown calc
+      if (cumulative > peakEquity) peakEquity = cumulative;
+      const drawdown = peakEquity - cumulative;
+      if (drawdown > maxDrawdown) maxDrawdown = drawdown;
+
       return {
         id: t.id,
         date: new Date(t.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -41,12 +57,16 @@ const PerformanceChart: React.FC<Props> = ({ trades }) => {
       };
     });
 
+    const profitFactor = grossLoss === 0 ? grossProfit : grossProfit / grossLoss;
+
     return {
       data: chartData,
       stats: {
         totalPnl,
         winRate: closedTrades.length > 0 ? (wins / closedTrades.length) * 100 : 0,
-        count: closedTrades.length
+        count: closedTrades.length,
+        maxDrawdown,
+        profitFactor
       }
     };
   }, [trades]);
@@ -63,42 +83,56 @@ const PerformanceChart: React.FC<Props> = ({ trades }) => {
 
   return (
     <div className="flex flex-col h-full gap-4">
-      {/* Mini Stats */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="bg-hyper-bg/40 rounded-lg p-3 border border-hyper-border flex items-center justify-between">
+      {/* Mini Stats Row 1 */}
+      <div className="grid grid-cols-3 gap-2 md:gap-4">
+        <div className="bg-hyper-bg/40 rounded-lg p-2 md:p-3 border border-hyper-border flex items-center justify-between">
             <div>
-                <p className="text-[10px] text-hyper-muted uppercase tracking-wider">Net PnL</p>
-                <p className={`font-mono font-bold text-lg ${stats.totalPnl >= 0 ? 'text-hyper-accent' : 'text-hyper-danger'}`}>
+                <p className="text-[8px] md:text-[10px] text-hyper-muted uppercase tracking-wider">Net PnL</p>
+                <p className={`font-mono font-bold text-sm md:text-lg ${stats.totalPnl >= 0 ? 'text-hyper-accent' : 'text-hyper-danger'}`}>
                     {stats.totalPnl >= 0 ? '+' : ''}{stats.totalPnl.toFixed(2)}
                 </p>
             </div>
-            <div className={`p-2 rounded-full ${stats.totalPnl >= 0 ? 'bg-hyper-accent/10 text-hyper-accent' : 'bg-hyper-danger/10 text-hyper-danger'}`}>
-                <DollarSign size={16} />
+            <div className={`p-1.5 md:p-2 rounded-full ${stats.totalPnl >= 0 ? 'bg-hyper-accent/10 text-hyper-accent' : 'bg-hyper-danger/10 text-hyper-danger'}`}>
+                <DollarSign size={14} />
             </div>
         </div>
-        <div className="bg-hyper-bg/40 rounded-lg p-3 border border-hyper-border flex items-center justify-between">
+        <div className="bg-hyper-bg/40 rounded-lg p-2 md:p-3 border border-hyper-border flex items-center justify-between">
             <div>
-                <p className="text-[10px] text-hyper-muted uppercase tracking-wider">Win Rate</p>
-                <p className="font-mono font-bold text-lg text-white">
+                <p className="text-[8px] md:text-[10px] text-hyper-muted uppercase tracking-wider">Win Rate</p>
+                <p className="font-mono font-bold text-sm md:text-lg text-white">
                     {stats.winRate.toFixed(1)}%
                 </p>
             </div>
-            <div className="p-2 rounded-full bg-blue-500/10 text-blue-500">
-                <Target size={16} />
+            <div className="p-1.5 md:p-2 rounded-full bg-blue-500/10 text-blue-500">
+                <Target size={14} />
             </div>
         </div>
-        <div className="bg-hyper-bg/40 rounded-lg p-3 border border-hyper-border flex items-center justify-between">
+        <div className="bg-hyper-bg/40 rounded-lg p-2 md:p-3 border border-hyper-border flex items-center justify-between">
             <div>
-                <p className="text-[10px] text-hyper-muted uppercase tracking-wider">Total Trades</p>
-                <p className="font-mono font-bold text-lg text-white">
-                    {stats.count}
+                <p className="text-[8px] md:text-[10px] text-hyper-muted uppercase tracking-wider">Profit Factor</p>
+                <p className="font-mono font-bold text-sm md:text-lg text-white">
+                    {stats.profitFactor.toFixed(2)}
                 </p>
             </div>
-             <div className="p-2 rounded-full bg-purple-500/10 text-purple-500">
-                <Activity size={16} />
+             <div className="p-1.5 md:p-2 rounded-full bg-purple-500/10 text-purple-500">
+                <Divide size={14} />
             </div>
         </div>
       </div>
+
+       {/* Mini Stats Row 2 */}
+       <div className="flex gap-4">
+           <div className="flex-1 bg-hyper-bg/20 rounded border border-hyper-border/50 px-3 py-1 flex items-center gap-2">
+               <TrendingDown size={12} className="text-hyper-danger" />
+               <span className="text-[10px] text-hyper-muted uppercase">Max Drawdown:</span>
+               <span className="text-xs font-mono text-hyper-danger font-bold">-${stats.maxDrawdown.toFixed(2)}</span>
+           </div>
+           <div className="flex-1 bg-hyper-bg/20 rounded border border-hyper-border/50 px-3 py-1 flex items-center gap-2">
+               <Activity size={12} className="text-white" />
+               <span className="text-[10px] text-hyper-muted uppercase">Total Trades:</span>
+               <span className="text-xs font-mono text-white font-bold">{stats.count}</span>
+           </div>
+       </div>
 
       {/* Chart */}
       <div className="flex-1 min-h-0 w-full bg-hyper-bg/20 rounded-lg border border-hyper-border/50 p-2">

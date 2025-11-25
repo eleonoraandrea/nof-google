@@ -1,6 +1,7 @@
+
 import React, { useState, useMemo } from 'react';
 import { Trade, TradeSide, TradeConfig, AssetName } from '../types';
-import { Clock, BrainCircuit, AlertTriangle, Crosshair, Filter, ChevronDown, Ban } from 'lucide-react';
+import { Clock, BrainCircuit, AlertTriangle, Crosshair, Filter, ChevronDown, Ban, Info } from 'lucide-react';
 
 interface Props {
   trades: Trade[];
@@ -38,6 +39,50 @@ const TradeLog: React.FC<Props> = ({ trades, config, onCloseTrade }) => {
       trades.forEach(t => assets.add(t.asset));
       return Array.from(assets);
   }, [trades]);
+
+  // Helper to highlight keywords in reasoning text
+  const renderHighlightedReasoning = (text: string) => {
+    const keywords = [
+        { word: 'RSI', color: 'text-blue-400 font-bold' },
+        { word: 'Fear', color: 'text-orange-400 font-bold' },
+        { word: 'Greed', color: 'text-green-400 font-bold' },
+        { word: 'News', color: 'text-yellow-400 font-bold' },
+        { word: 'Bullish', color: 'text-green-400 font-bold' },
+        { word: 'Bearish', color: 'text-red-400 font-bold' },
+        { word: 'Overbought', color: 'text-red-400 font-bold' },
+        { word: 'Oversold', color: 'text-green-400 font-bold' },
+        { word: 'Volume', color: 'text-blue-300' },
+        { word: 'Momentum', color: 'text-purple-300' },
+        { word: 'Support', color: 'text-green-300' },
+        { word: 'Resistance', color: 'text-red-300' }
+    ];
+
+    const parts = text.split(/(\b(?:RSI|Fear|Greed|News|Bullish|Bearish|Overbought|Oversold|Volume|Momentum|Support|Resistance)\b)/gi);
+
+    return (
+        <span>
+            {parts.map((part, i) => {
+                const match = keywords.find(k => k.word.toLowerCase() === part.toLowerCase());
+                if (match) {
+                    return <span key={i} className={`${match.color}`}>{part}</span>;
+                }
+                return <span key={i}>{part}</span>;
+            })}
+        </span>
+    );
+  };
+
+  const getRsiTooltip = (rsi: number) => {
+      if (rsi > 70) return "High RSI (>70): Asset is potentially Overbought. Reversal risk high.";
+      if (rsi < 30) return "Low RSI (<30): Asset is potentially Oversold. Bounce opportunity.";
+      return "Neutral RSI (30-70): Market is in equilibrium.";
+  };
+
+  const getFearTooltip = (fear: number) => {
+      if (fear < 25) return "Extreme Fear (<25): Market is panicked. Potential buying opportunity.";
+      if (fear > 75) return "Extreme Greed (>75): Market is euphoric. Correction risk high.";
+      return "Neutral Sentiment: No strong emotional bias in the market.";
+  };
 
   return (
     <div className="h-full flex flex-col">
@@ -280,37 +325,58 @@ const TradeLog: React.FC<Props> = ({ trades, config, onCloseTrade }) => {
                     </div>
                 )}
 
-                {/* AI Reasoning */}
-                <div className="border-t border-hyper-border pt-2 mt-2">
-                    <div className="flex items-start gap-2 mb-2">
-                        <BrainCircuit size={12} className="text-purple-400 mt-0.5 shrink-0" />
-                        <p className="text-hyper-muted leading-tight italic opacity-80 hover:opacity-100 transition-all cursor-default">
-                            "{trade.reasoning}"
+                {/* AI Reasoning - HIGHLIGHTED */}
+                <div className="mt-3 pt-3 border-t border-hyper-border">
+                    <div className="p-3 bg-gradient-to-br from-purple-500/10 to-blue-500/5 rounded-lg border-l-2 border-purple-500/50 relative overflow-hidden group">
+                        {/* Glow effect */}
+                        <div className="absolute top-0 right-0 w-20 h-20 bg-purple-500/10 blur-xl rounded-full -translate-y-1/2 translate-x-1/2"></div>
+                        
+                        <div className="flex items-center gap-2 mb-1">
+                            <BrainCircuit size={12} className="text-purple-400" />
+                            <span className="text-[10px] font-bold text-purple-300 uppercase tracking-wider">AI Reasoning</span>
+                        </div>
+                        
+                        <p className="text-xs text-slate-300 italic leading-relaxed relative z-10">
+                            "{renderHighlightedReasoning(trade.reasoning)}"
                         </p>
                     </div>
                     
-                    {/* Market Factors Snapshot */}
+                    {/* Market Factors Snapshot with TOOLTIPS */}
                     {snapshot && (
-                        <div className="flex items-center gap-2 mt-2 pt-2 border-t border-hyper-border/30 overflow-x-auto no-scrollbar">
-                            <span className="text-[9px] text-hyper-muted uppercase tracking-wider shrink-0">Signals:</span>
+                        <div className="flex items-center gap-2 mt-2 ml-1 overflow-x-auto no-scrollbar opacity-90">
+                            <span className="text-[9px] text-hyper-muted uppercase tracking-wider shrink-0 flex items-center gap-1">
+                                Context <Info size={8}/>:
+                            </span>
                             
                             {/* RSI Badge */}
-                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border ${
-                                snapshotRsi > 70 ? 'bg-hyper-danger/10 text-hyper-danger border-hyper-danger/20' : 
-                                snapshotRsi < 30 ? 'bg-hyper-accent/10 text-hyper-accent border-hyper-accent/20' : 
-                                'bg-slate-800 text-slate-400 border-slate-700'
-                            }`}>
-                                RSI {snapshotRsi.toFixed(0)}
-                            </span>
+                            <div className="group relative">
+                                <span className={`cursor-help px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border ${
+                                    snapshotRsi > 70 ? 'bg-hyper-danger/10 text-hyper-danger border-hyper-danger/20' : 
+                                    snapshotRsi < 30 ? 'bg-hyper-accent/10 text-hyper-accent border-hyper-accent/20' : 
+                                    'bg-slate-800 text-slate-400 border-slate-700'
+                                }`}>
+                                    RSI {snapshotRsi.toFixed(0)}
+                                </span>
+                                {/* Tooltip */}
+                                <div className="absolute bottom-full left-0 mb-2 w-40 bg-black border border-hyper-border p-2 rounded shadow-lg hidden group-hover:block z-50">
+                                    <p className="text-[10px] text-white leading-tight">{getRsiTooltip(snapshotRsi)}</p>
+                                </div>
+                            </div>
 
                             {/* Fear Badge */}
-                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border ${
-                                snapshotFear < 30 ? 'bg-hyper-accent/10 text-hyper-accent border-hyper-accent/20' : 
-                                snapshotFear > 70 ? 'bg-hyper-danger/10 text-hyper-danger border-hyper-danger/20' : 
-                                'bg-slate-800 text-slate-400 border-slate-700'
-                            }`}>
-                                Fear {snapshotFear}
-                            </span>
+                            <div className="group relative">
+                                <span className={`cursor-help px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border ${
+                                    snapshotFear < 30 ? 'bg-hyper-accent/10 text-hyper-accent border-hyper-accent/20' : 
+                                    snapshotFear > 70 ? 'bg-hyper-danger/10 text-hyper-danger border-hyper-danger/20' : 
+                                    'bg-slate-800 text-slate-400 border-slate-700'
+                                }`}>
+                                    Fear {snapshotFear}
+                                </span>
+                                {/* Tooltip */}
+                                <div className="absolute bottom-full left-0 mb-2 w-40 bg-black border border-hyper-border p-2 rounded shadow-lg hidden group-hover:block z-50">
+                                    <p className="text-[10px] text-white leading-tight">{getFearTooltip(snapshotFear)}</p>
+                                </div>
+                            </div>
 
                             {/* News Badge */}
                             <span className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border ${

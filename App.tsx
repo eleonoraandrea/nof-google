@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
     AssetName, 
@@ -20,6 +21,7 @@ import {
 } from './services/hyperliquidService';
 import { calculateRSI } from './services/technicalAnalysis';
 import { logTrade, fetchTradeHistory, saveConfig, saveSystemStatus } from './services/supabaseService';
+import { sendTelegramMessage, formatTradeMessage, formatPerformanceReport } from './services/telegramService';
 import AssetCard from './components/AssetCard';
 import TradeLog from './components/TradeLog';
 import PerformanceChart from './components/PerformanceChart';
@@ -36,11 +38,11 @@ import {
     PlayCircle,
     Activity,
     BrainCircuit,
-    Cpu
+    Cpu,
+    ShieldAlert
 } from 'lucide-react';
 
 // --- Constants ---
-const ANALYSIS_INTERVAL = 15 * 60 * 1000; // AI thinks every 15 MINUTES
 const CANDLE_INTERVAL = 1000; // Check for candle closure/update frequently
 const TRADING_FEE_RATE = 0.001; // 0.1% fee per side
 
@@ -56,7 +58,10 @@ const INITIAL_CONFIG: TradeConfig = {
     riskPerTrade: 0.1, // 10% of portfolio size
     stopLossPct: 0.02, // 2% SL
     takeProfitPct: 0.04, // 4% TP
-    aiModel: 'gemini-2.5-flash'
+    aiModel: 'gemini-2.5-flash',
+    analysisIntervalMins: 15, // Default 15 mins
+    notificationsEnabled: false,
+    executionMode: 'SIMULATION'
 };
 
 const AI_MODELS = [
@@ -135,9 +140,6 @@ const App: React.FC = () => {
             const snapshot = await fetchHLSnapshot();
             const initialData: Record<string, MarketData> = {};
             
-            // Populate market data for ALL available assets from snapshot
-            // This ensures that if the user adds an asset dynamically, the data is likely already initialized
-            // or ready to be updated by WS.
             if (snapshot) {
                 Object.keys(snapshot).forEach(asset => {
                     const s = snapshot[asset];
@@ -176,29 +178,11 @@ const App: React.FC = () => {
                     const next = { ...prev };
                     let hasUpdate = false;
                     
-                    // We iterate over all keys in the `mids` update that match tracked assets
-                    // Or efficient approach: Iterate over tracked assets and check `mids`
-                    // BUT, since we initialized `prev` with ALL assets from snapshot, we can iterate all keys in `prev`?
-                    // No, that's too slow (200+ keys).
-                    // Better: We only care about displaying/trading `config.assets`.
-                    
-                    // However, to support dynamic adding properly, the state `marketData` should probably track everything
-                    // OR we lazily add to it. Since we pre-filled it from snapshot, `prev[asset]` exists for valid assets.
-                    
-                    // Let's iterate over `configRef.current.assets` PLUS the currently selected asset to ensure UI updates.
-                    // We also include existing keys in `prev` that appear in `mids`?
-                    // To keep it performant but correct:
-                    // We iterate the incoming `mids`? No, mids contains ALL assets.
-                    // We iterate our configured assets + selected asset.
-                    
                     const assetsToUpdate = new Set([...configRef.current.assets, selectedAssetRef.current]);
 
                     assetsToUpdate.forEach(asset => {
                         const newPrice = mids[asset];
                         if (newPrice !== undefined) {
-                            // If not in prev (e.g. added after snapshot), initialize it on the fly?
-                            // Standard behavior: if snapshot was thorough, it's there.
-                            // If not, we might miss it until we re-snapshot, but HL snapshot usually has all.
                             const current = prev[asset];
                             
                             if (current && current.price !== newPrice) {
@@ -232,7 +216,6 @@ const App: React.FC = () => {
                                     rsi: currentAssetRsi
                                 };
                             } else if (!current) {
-                                // Lazy initialization for an asset not in snapshot (rare, but possible for new listings)
                                 hasUpdate = true;
                                 next[asset] = {
                                     asset,
@@ -421,7 +404,13 @@ const App: React.FC = () => {
             equity: prev.equity + finalNetPnl,
             availableMargin: prev.availableMargin + trade.size + finalNetPnl
         }));
+        
         logTrade(closed); // Save to Supabase
+        
+        // Notify Telegram
+        const msg = formatTradeMessage(closed, true);
+        sendTelegramMessage(msg, configRef.current);
+
     }, []);
 
     const executeAiLoop = useCallback(async () => {
@@ -439,6 +428,13 @@ const App: React.FC = () => {
             fearIndexRef.current, 
             currentConfig
         );
+
+        // Daily (or periodic) Performance Report to Telegram
+        // Logic: if current time close to midnight UTC? Or just randomness for simulation
+        if (Math.random() < 0.005) { // Occasional report
+             const report = formatPerformanceReport(currentPortfolio, tradeHistoryRef.current);
+             sendTelegramMessage(report, currentConfig);
+        }
 
         const candidateAssets = currentConfig.assets;
         if (candidateAssets.length === 0) return;
@@ -522,6 +518,19 @@ const App: React.FC = () => {
                 }
             };
 
+            // REAL EXECUTION LOGIC PLACEHOLDER
+            if (currentConfig.executionMode === 'REAL') {
+                if (!currentConfig.walletPrivateKey) {
+                    setLastAnalysis("ABORTED: Real mode requires private key");
+                    setIsAnalyzing(false);
+                    return;
+                }
+                console.log("!!! REAL ORDER EXECUTION TRIGGERED !!!");
+                console.log(`Signing transaction with key ending in ...${currentConfig.walletPrivateKey.slice(-4)}`);
+                console.log(`Payload: ${newTrade.side} ${newTrade.size} USD on ${newTrade.asset}`);
+                // In a real implementation with ethers.js, we would sign EIP-712 here
+            }
+
             setActiveTrades(prev => [...prev, newTrade]);
             setPortfolio(prev => ({
                 ...prev,
@@ -530,20 +539,26 @@ const App: React.FC = () => {
             
             // Save Reasoning and Trade to DB
             logTrade(newTrade);
+            
+            // Notify Telegram
+            const msg = formatTradeMessage(newTrade);
+            sendTelegramMessage(msg, currentConfig);
         }
 
         setIsAnalyzing(false);
     }, [isRunning, isAnalyzing, closeTrade]);
 
-    // Setup AI Interval
+    // Setup AI Interval with Dynamic Configuration
     useEffect(() => {
         if (isRunning) {
-            aiInterval.current = setInterval(executeAiLoop, ANALYSIS_INTERVAL);
+            // Convert Minutes to Milliseconds
+            const intervalMs = (config.analysisIntervalMins || 15) * 60 * 1000;
+            aiInterval.current = setInterval(executeAiLoop, intervalMs);
         } else {
             if (aiInterval.current) clearInterval(aiInterval.current);
         }
         return () => { if (aiInterval.current) clearInterval(aiInterval.current); };
-    }, [isRunning, executeAiLoop]);
+    }, [isRunning, executeAiLoop, config.analysisIntervalMins]);
 
     const handleSaveConfig = (newConfig: TradeConfig) => {
         setConfig(newConfig);
@@ -551,7 +566,6 @@ const App: React.FC = () => {
     };
 
     // Filter market data for display based on config
-    // We only display cards for configured assets
     const displayedAssets = config.assets.filter(a => marketData[a]);
 
     return (
@@ -579,6 +593,13 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-6">
+                    {/* Execution Mode Badge */}
+                    {config.executionMode === 'REAL' && (
+                        <div className="hidden md:flex items-center gap-2 bg-hyper-danger/10 text-hyper-danger border border-hyper-danger/30 px-3 py-1 rounded-full text-xs font-bold animate-pulse">
+                            <ShieldAlert size={12} /> REAL EXECUTION ACTIVE
+                        </div>
+                    )}
+
                     {/* Model Selector */}
                     <div className="relative group flex items-center gap-2 bg-hyper-card border border-hyper-border rounded-lg px-3 py-1.5 hover:border-hyper-accent transition-colors">
                         <Cpu size={14} className="text-hyper-muted" />
@@ -793,7 +814,7 @@ const App: React.FC = () => {
                                 {`> System: ${isRunning ? 'Online' : 'Standby'}`}
                             </div>
                             <div className="text-hyper-muted">
-                                {`> Interval: 15 Minutes`}
+                                {`> Interval: ${config.analysisIntervalMins} Minutes`}
                             </div>
                             <div className="text-hyper-muted">
                                 {`> Model: ${AI_MODELS.find(m => m.id === config.aiModel)?.name || config.aiModel}`}
