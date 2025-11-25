@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
     AssetName, 
@@ -26,6 +25,7 @@ import AssetCard from './components/AssetCard';
 import TradeLog from './components/TradeLog';
 import PerformanceChart from './components/PerformanceChart';
 import PnLDistributionChart from './components/PnLDistributionChart';
+import ClosedTradesList from './components/ClosedTradesList';
 import NewsFeed from './components/NewsFeed';
 import ConfigModal from './components/ConfigModal';
 import TVChart from './components/TVChart';
@@ -178,7 +178,13 @@ const App: React.FC = () => {
                     const next = { ...prev };
                     let hasUpdate = false;
                     
-                    const assetsToUpdate = new Set([...configRef.current.assets, selectedAssetRef.current]);
+                    // CRITICAL FIX: Ensure we subscribe to updates for Configured Assets, Selected Asset, AND Active Trades
+                    // This guarantees manual close PnL is accurate even if asset isn't selected
+                    const assetsToUpdate = new Set([
+                        ...configRef.current.assets, 
+                        selectedAssetRef.current,
+                        ...activeTradesRef.current.map(t => t.asset)
+                    ]);
 
                     assetsToUpdate.forEach(asset => {
                         const newPrice = mids[asset];
@@ -375,7 +381,15 @@ const App: React.FC = () => {
 
     // --- Trading Logic ---
     const closeTrade = useCallback((trade: Trade, reason: string) => {
-        const currentPrice = marketDataRef.current[trade.asset]?.price || trade.entryPrice;
+        // Ensure we have latest data
+        const currentData = marketDataRef.current[trade.asset];
+        const currentPrice = currentData?.price || trade.entryPrice;
+        
+        // Log warning if closing with potentially stale data (price shouldn't be 0 if WS is working)
+        if (!currentData || currentData.price === 0) {
+            console.warn(`Closing trade for ${trade.asset} with potentially stale price data.`);
+        }
+
         const positionNotional = trade.size * trade.leverage;
         const quantity = trade.entryPrice > 0 ? positionNotional / trade.entryPrice : 0;
         
@@ -430,7 +444,6 @@ const App: React.FC = () => {
         );
 
         // Daily (or periodic) Performance Report to Telegram
-        // Logic: if current time close to midnight UTC? Or just randomness for simulation
         if (Math.random() < 0.005) { // Occasional report
              const report = formatPerformanceReport(currentPortfolio, tradeHistoryRef.current);
              sendTelegramMessage(report, currentConfig);
@@ -526,9 +539,7 @@ const App: React.FC = () => {
                     return;
                 }
                 console.log("!!! REAL ORDER EXECUTION TRIGGERED !!!");
-                console.log(`Signing transaction with key ending in ...${currentConfig.walletPrivateKey.slice(-4)}`);
                 console.log(`Payload: ${newTrade.side} ${newTrade.size} USD on ${newTrade.asset}`);
-                // In a real implementation with ethers.js, we would sign EIP-712 here
             }
 
             setActiveTrades(prev => [...prev, newTrade]);
@@ -787,8 +798,16 @@ const App: React.FC = () => {
                                 />
                             )}
                             
+                            {/* Combined Performance Dashboard: Chart + Closed Trades List */}
                             {chartView === 'PERFORMANCE' && (
-                                <PerformanceChart trades={[...activeTrades, ...tradeHistory]} />
+                                <div className="flex flex-col h-full gap-4">
+                                    <div className="h-1/2 min-h-[200px]">
+                                        <PerformanceChart trades={[...activeTrades, ...tradeHistory]} />
+                                    </div>
+                                    <div className="flex-1 min-h-[200px] overflow-hidden">
+                                        <ClosedTradesList trades={tradeHistory} />
+                                    </div>
+                                </div>
                             )}
                             
                             {chartView === 'DISTRIBUTION' && (

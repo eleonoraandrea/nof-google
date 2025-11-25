@@ -311,16 +311,18 @@ const TradeLog: React.FC<Props> = ({ trades, config, onCloseTrade }) => {
                             <span className="text-hyper-accent">TP +{(config.takeProfitPct * 100).toFixed(1)}%</span>
                         </div>
 
-                        {/* Manual Close Button */}
+                        {/* Manual Close Button - Enhanced */}
                         <button 
                             onClick={(e) => {
                                 e.stopPropagation();
-                                onCloseTrade(trade, 'Manual Override');
+                                if(window.confirm('Are you sure you want to manually close this trade?')) {
+                                    onCloseTrade(trade, 'Manual Override');
+                                }
                             }}
-                            className="w-full mt-3 py-1.5 rounded bg-hyper-danger/10 border border-hyper-danger/30 hover:bg-hyper-danger/20 hover:border-hyper-danger text-hyper-danger font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all group"
+                            className="w-full mt-3 py-2 rounded bg-hyper-danger border border-hyper-danger text-black font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all hover:bg-red-600 hover:border-red-600 shadow-[0_0_10px_rgba(255,77,77,0.3)] hover:shadow-[0_0_15px_rgba(255,77,77,0.5)] group"
                         >
-                            <Ban size={12} className="group-hover:rotate-90 transition-transform" />
-                            Close {trade.side}
+                            <Ban size={14} className="group-hover:rotate-90 transition-transform" />
+                            Close {trade.side} Now
                         </button>
                     </div>
                 )}
