@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
     AssetName, 
@@ -39,7 +40,9 @@ import {
     Activity,
     BrainCircuit,
     Cpu,
-    ShieldAlert
+    ShieldAlert,
+    Network,
+    Server
 } from 'lucide-react';
 
 // --- Constants ---
@@ -58,8 +61,15 @@ const INITIAL_CONFIG: TradeConfig = {
     riskPerTrade: 0.1, // 10% of portfolio size
     stopLossPct: 0.02, // 2% SL
     takeProfitPct: 0.04, // 4% TP
+    
+    // AI Settings
+    aiProvider: 'GEMINI',
     aiModel: 'gemini-2.5-flash',
-    analysisIntervalMins: 15, // Default 15 mins
+    analysisIntervalMins: 15,
+    openRouterModel: 'deepseek/deepseek-r1',
+    ollamaBaseUrl: 'http://localhost:11434',
+    ollamaModel: 'llama3',
+
     notificationsEnabled: false,
     executionMode: 'SIMULATION'
 };
@@ -344,7 +354,8 @@ const App: React.FC = () => {
             // News
             if (Math.random() < 0.05) { 
                 const rawNews = getMockNews();
-                analyzeNewsSentiment(rawNews.headline).then(analysis => {
+                // Pass current config to ensure correct AI provider is used
+                analyzeNewsSentiment(rawNews.headline, configRef.current).then(analysis => {
                     const enrichedNews: NewsItem = { 
                         ...rawNews, 
                         sentiment: analysis.sentiment,
@@ -486,7 +497,7 @@ const App: React.FC = () => {
             fearIndexRef.current, 
             tradeHistoryRef.current, 
             currentPortfolio.equity,
-            currentConfig.aiModel
+            currentConfig
         );
 
         setLastAnalysis(`${result.decision} ${assetToAnalyze} (${result.confidence}%)`);
@@ -611,24 +622,12 @@ const App: React.FC = () => {
                         </div>
                     )}
 
-                    {/* Model Selector */}
-                    <div className="relative group flex items-center gap-2 bg-hyper-card border border-hyper-border rounded-lg px-3 py-1.5 hover:border-hyper-accent transition-colors">
-                        <Cpu size={14} className="text-hyper-muted" />
-                        <select 
-                            value={config.aiModel}
-                            onChange={(e) => setConfig(prev => ({...prev, aiModel: e.target.value}))}
-                            className="bg-transparent text-xs font-bold outline-none text-white cursor-pointer appearance-none pr-4"
-                            style={{ backgroundImage: 'none' }}
-                        >
-                            {AI_MODELS.map(model => (
-                                <option key={model.id} value={model.id} className="bg-hyper-card text-white">
-                                    {model.name}
-                                </option>
-                            ))}
-                        </select>
-                        <div className="absolute right-3 pointer-events-none">
-                            <svg className="w-2 h-2 text-hyper-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-                        </div>
+                    {/* Model Provider Info */}
+                    <div className="flex items-center gap-2 bg-hyper-card border border-hyper-border rounded-lg px-3 py-1.5 text-xs">
+                        {config.aiProvider === 'GEMINI' && <Cpu size={14} className="text-hyper-accent" />}
+                        {config.aiProvider === 'OPENROUTER' && <Network size={14} className="text-blue-400" />}
+                        {config.aiProvider === 'OLLAMA' && <Server size={14} className="text-orange-400" />}
+                        <span className="text-white font-bold">{config.aiProvider}</span>
                     </div>
 
                     <div className="flex flex-col items-end hidden md:flex">
@@ -824,7 +823,7 @@ const App: React.FC = () => {
                         </h2>
                         
                         <div className="flex-1 font-mono text-sm space-y-2 overflow-y-auto">
-                            {!process.env.API_KEY && (
+                            {!process.env.API_KEY && config.aiProvider === 'GEMINI' && (
                                 <div className="text-yellow-500 mb-2 border border-yellow-500/30 bg-yellow-500/10 p-2 rounded">
                                     WARNING: No API_KEY detected. AI is running in simulation mode.
                                 </div>
@@ -836,7 +835,10 @@ const App: React.FC = () => {
                                 {`> Interval: ${config.analysisIntervalMins} Minutes`}
                             </div>
                             <div className="text-hyper-muted">
-                                {`> Model: ${AI_MODELS.find(m => m.id === config.aiModel)?.name || config.aiModel}`}
+                                {`> Provider: ${config.aiProvider}`}
+                            </div>
+                            <div className="text-hyper-muted">
+                                {`> Model: ${config.aiProvider === 'GEMINI' ? config.aiModel : config.aiProvider === 'OPENROUTER' ? config.openRouterModel : config.ollamaModel}`}
                             </div>
                             <div className="text-hyper-muted">
                                 {`> Strategy: Max Lev ${config.maxLeverage}x | Risk ${(config.riskPerTrade * 100).toFixed(0)}% | Est. Fees ${(TRADING_FEE_RATE * 100).toFixed(1)}%`}

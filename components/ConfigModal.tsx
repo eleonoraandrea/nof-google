@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { TradeConfig, AssetName } from '../types';
-import { X, Save, AlertTriangle, Plus, Trash2, Wallet, Send, Settings, ShieldAlert, CheckCircle, BellRing } from 'lucide-react';
+import { TradeConfig, AssetName, AIProvider } from '../types';
+import { X, Save, AlertTriangle, Plus, Trash2, Wallet, Send, Settings, ShieldAlert, CheckCircle, BellRing, Cpu, Network, Server } from 'lucide-react';
 import { sendTelegramMessage } from '../services/telegramService';
 
 interface Props {
@@ -117,6 +117,136 @@ const ConfigModal: React.FC<Props> = ({ isOpen, onClose, config, onSave }) => {
           
           {activeTab === 'STRATEGY' && (
               <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
+                
+                {/* AI Configuration Section */}
+                <div className="space-y-4 border-b border-hyper-border/50 pb-6">
+                    <label className="text-sm text-hyper-muted uppercase font-bold tracking-wider block mb-2">AI Model Provider</label>
+                    <div className="grid grid-cols-3 gap-2">
+                        {(['GEMINI', 'OPENROUTER', 'OLLAMA'] as AIProvider[]).map(provider => (
+                            <button
+                                key={provider}
+                                onClick={() => handleChange('aiProvider', provider)}
+                                className={`py-2 rounded border text-xs font-bold transition-all flex flex-col items-center gap-1 ${
+                                    localConfig.aiProvider === provider 
+                                    ? 'bg-hyper-accent/10 border-hyper-accent text-hyper-accent' 
+                                    : 'bg-black/20 border-hyper-border text-slate-400 hover:border-slate-500'
+                                }`}
+                            >
+                                {provider === 'GEMINI' && <Cpu size={14} />}
+                                {provider === 'OPENROUTER' && <Network size={14} />}
+                                {provider === 'OLLAMA' && <Server size={14} />}
+                                {provider}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Gemini Specific */}
+                    {localConfig.aiProvider === 'GEMINI' && (
+                         <div className="bg-hyper-bg/30 p-3 rounded border border-hyper-border/30 space-y-3">
+                            <div>
+                                <label className="text-xs text-slate-400 block mb-1">Gemini API Key</label>
+                                <input 
+                                    type="password"
+                                    value={localConfig.geminiApiKey || ''}
+                                    onChange={(e) => handleChange('geminiApiKey', e.target.value)}
+                                    placeholder="AIza..."
+                                    className="w-full bg-black/40 border border-hyper-border rounded px-2 py-1.5 text-xs text-white outline-none focus:border-hyper-accent"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-400 block mb-1">Model Name</label>
+                                <select 
+                                    value={localConfig.aiModel}
+                                    onChange={(e) => handleChange('aiModel', e.target.value)}
+                                    className="w-full bg-black/40 border border-hyper-border rounded px-2 py-1.5 text-xs text-white outline-none focus:border-hyper-accent"
+                                >
+                                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                                    <option value="gemini-3-pro-preview">Gemini 3 Pro</option>
+                                </select>
+                            </div>
+                         </div>
+                    )}
+
+                    {/* OpenRouter Specific */}
+                    {localConfig.aiProvider === 'OPENROUTER' && (
+                        <div className="bg-hyper-bg/30 p-3 rounded border border-hyper-border/30 space-y-3">
+                            <div>
+                                <label className="text-xs text-slate-400 block mb-1">OpenRouter API Key</label>
+                                <input 
+                                    type="password"
+                                    value={localConfig.openRouterApiKey || ''}
+                                    onChange={(e) => handleChange('openRouterApiKey', e.target.value)}
+                                    placeholder="sk-or-..."
+                                    className="w-full bg-black/40 border border-hyper-border rounded px-2 py-1.5 text-xs text-white outline-none focus:border-hyper-accent"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-400 block mb-1">Model ID</label>
+                                <input 
+                                    type="text"
+                                    value={localConfig.openRouterModel || ''}
+                                    onChange={(e) => handleChange('openRouterModel', e.target.value)}
+                                    placeholder="deepseek/deepseek-r1"
+                                    className="w-full bg-black/40 border border-hyper-border rounded px-2 py-1.5 text-xs text-white outline-none focus:border-hyper-accent"
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Ollama Specific */}
+                    {localConfig.aiProvider === 'OLLAMA' && (
+                        <div className="bg-hyper-bg/30 p-3 rounded border border-hyper-border/30 space-y-3">
+                            <div className="flex items-start gap-2 bg-yellow-500/10 p-2 rounded border border-yellow-500/20 mb-2">
+                                <AlertTriangle size={12} className="text-yellow-500 shrink-0 mt-0.5"/>
+                                <p className="text-[10px] text-yellow-200/80 leading-tight">
+                                    Localhost usage usually requires setting environment variable <code>OLLAMA_ORIGINS="*"</code> when running Ollama.
+                                </p>
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-400 block mb-1">Base URL</label>
+                                <input 
+                                    type="text"
+                                    value={localConfig.ollamaBaseUrl || 'http://localhost:11434'}
+                                    onChange={(e) => handleChange('ollamaBaseUrl', e.target.value)}
+                                    placeholder="http://localhost:11434"
+                                    className="w-full bg-black/40 border border-hyper-border rounded px-2 py-1.5 text-xs text-white outline-none focus:border-hyper-accent"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-400 block mb-1">Model Name</label>
+                                <input 
+                                    type="text"
+                                    value={localConfig.ollamaModel || ''}
+                                    onChange={(e) => handleChange('ollamaModel', e.target.value)}
+                                    placeholder="llama3"
+                                    className="w-full bg-black/40 border border-hyper-border rounded px-2 py-1.5 text-xs text-white outline-none focus:border-hyper-accent"
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    <div>
+                        <div className="flex justify-between mb-2">
+                            <label className="text-sm text-hyper-muted uppercase font-bold tracking-wider">Analysis Interval</label>
+                            <span className="font-mono text-white font-bold">{localConfig.analysisIntervalMins || 15} Mins</span>
+                        </div>
+                        <input 
+                            type="range" 
+                            min="1" 
+                            max="60" 
+                            step="1"
+                            value={localConfig.analysisIntervalMins || 15}
+                            onChange={(e) => handleChange('analysisIntervalMins', parseInt(e.target.value))}
+                            className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                        />
+                        <div className="flex justify-between text-[10px] text-slate-500 mt-1 font-mono">
+                            <span>1m</span>
+                            <span>15m</span>
+                            <span>60m</span>
+                        </div>
+                    </div>
+                </div>
+
                 {/* Asset Basket Selection */}
                 <div>
                     <div className="flex justify-between items-center mb-3">
@@ -181,28 +311,6 @@ const ConfigModal: React.FC<Props> = ({ isOpen, onClose, config, onSave }) => {
                 </div>
 
                 <div className="border-b border-hyper-border/50"></div>
-
-                {/* AI Analysis Interval */}
-                <div>
-                    <div className="flex justify-between mb-2">
-                    <label className="text-sm text-hyper-muted uppercase font-bold tracking-wider">AI Analysis Interval</label>
-                    <span className="font-mono text-white font-bold">{localConfig.analysisIntervalMins || 15} Mins</span>
-                    </div>
-                    <input 
-                    type="range" 
-                    min="1" 
-                    max="60" 
-                    step="1"
-                    value={localConfig.analysisIntervalMins || 15}
-                    onChange={(e) => handleChange('analysisIntervalMins', parseInt(e.target.value))}
-                    className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
-                    />
-                    <div className="flex justify-between text-[10px] text-slate-500 mt-1 font-mono">
-                    <span>1m (Turbo)</span>
-                    <span>15m (Normal)</span>
-                    <span>60m (Slow)</span>
-                    </div>
-                </div>
 
                 {/* Leverage */}
                 <div>

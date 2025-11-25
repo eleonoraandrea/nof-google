@@ -29,14 +29,31 @@ export interface MarketData {
   depth?: OrderBook;
 }
 
+export type AIProvider = 'GEMINI' | 'OPENROUTER' | 'OLLAMA';
+
 export interface TradeConfig {
   assets: string[];
   maxLeverage: number;
   riskPerTrade: number;
   stopLossPct: number;
   takeProfitPct: number;
-  aiModel: string;
-  analysisIntervalMins: number; // New setting
+  
+  // AI Configuration
+  aiProvider: AIProvider;
+  
+  // Gemini Specific
+  geminiApiKey?: string;
+  aiModel: string; // Used for Gemini Model ID
+
+  analysisIntervalMins: number;
+
+  // OpenRouter Specific
+  openRouterApiKey?: string;
+  openRouterModel?: string; // e.g., 'deepseek/deepseek-r1'
+
+  // Ollama Specific
+  ollamaBaseUrl?: string; // e.g., 'http://localhost:11434'
+  ollamaModel?: string; // e.g., 'llama3'
   
   // Telegram Configuration
   telegramBotToken?: string;
