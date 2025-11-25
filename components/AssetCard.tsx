@@ -23,41 +23,52 @@ const AssetCard: React.FC<Props> = ({ data, isSelected, onClick }) => {
       const { bids, asks } = data.depth;
       if (!bids || !asks || bids.length === 0 || asks.length === 0) return null;
 
-      // Max depth size for normalization
-      const maxBid = Math.max(...bids.map(b => b.sz));
-      const maxAsk = Math.max(...asks.map(a => a.sz));
-      const overallMax = Math.max(maxBid, maxAsk);
-      
-      // Take top 5 levels for compact view
-      const topBids = bids.slice(0, 5);
-      const topAsks = asks.slice(0, 5);
+      // Max depth size for normalization based on the visible range
+      // Using top 5 for calculation to keep bars relative to immediate liquidity displayed
+      const depthViewSize = 5;
+      const topBids = bids.slice(0, depthViewSize);
+      const topAsks = asks.slice(0, depthViewSize);
 
+      const maxBid = Math.max(...topBids.map(b => b.sz));
+      const maxAsk = Math.max(...topAsks.map(a => a.sz));
+      const overallMax = Math.max(maxBid, maxAsk) || 1; // Prevent div by zero
+      
       return (
           <div className="mt-3 pt-2 border-t border-hyper-border/50 animate-in fade-in">
               <div className="flex items-center gap-1 text-[10px] text-hyper-muted mb-1 uppercase tracking-wider">
                   <Layers size={10} /> Order Book Depth
               </div>
-              <div className="flex gap-1 h-8">
-                   {/* Bids (Green) - Right Aligned graphically */}
-                   <div className="flex-1 flex flex-col justify-end items-end gap-[1px]">
+              <div className="flex gap-1 h-10">
+                   {/* Bids (Green) - Right Aligned graphically towards center */}
+                   <div className="flex-1 flex flex-col gap-[1px]">
                        {topBids.map((b, i) => (
-                           <div key={`bid-${i}`} className="h-full bg-hyper-accent/30 rounded-sm" style={{ width: `${(b.sz / overallMax) * 100}%` }}></div>
+                           <div key={`bid-${i}`} className="flex-1 w-full flex justify-end">
+                                <div 
+                                    className="bg-hyper-accent/30 rounded-sm transition-all duration-300" 
+                                    style={{ width: `${(b.sz / overallMax) * 100}%`, height: '100%' }}
+                                ></div>
+                           </div>
                        ))}
                    </div>
                    
-                   {/* Divider */}
-                   <div className="w-[1px] bg-slate-700 h-full"></div>
+                   {/* Divider / Spread Indicator */}
+                   <div className="w-[1px] bg-slate-700/50 h-full mx-0.5"></div>
 
-                   {/* Asks (Red) - Left Aligned graphically */}
-                   <div className="flex-1 flex flex-col justify-end items-start gap-[1px]">
+                   {/* Asks (Red) - Left Aligned graphically away from center */}
+                   <div className="flex-1 flex flex-col gap-[1px]">
                        {topAsks.map((a, i) => (
-                           <div key={`ask-${i}`} className="h-full bg-hyper-danger/30 rounded-sm" style={{ width: `${(a.sz / overallMax) * 100}%` }}></div>
+                           <div key={`ask-${i}`} className="flex-1 w-full flex justify-start">
+                                <div 
+                                    className="bg-hyper-danger/30 rounded-sm transition-all duration-300" 
+                                    style={{ width: `${(a.sz / overallMax) * 100}%`, height: '100%' }}
+                                ></div>
+                           </div>
                        ))}
                    </div>
               </div>
-              <div className="flex justify-between text-[9px] text-hyper-muted font-mono mt-1">
-                  <span>Bid Vol</span>
-                  <span>Ask Vol</span>
+              <div className="flex justify-between text-[9px] text-hyper-muted font-mono mt-1 px-1">
+                  <span className="text-hyper-accent/80">{topBids[0]?.px.toFixed(2) || '-'}</span>
+                  <span className="text-hyper-danger/80">{topAsks[0]?.px.toFixed(2) || '-'}</span>
               </div>
           </div>
       )
