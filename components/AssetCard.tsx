@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { MarketData, AssetName } from '../types';
 import { TrendingUp, TrendingDown, Activity, Layers } from 'lucide-react';
@@ -24,28 +25,39 @@ const AssetCard: React.FC<Props> = ({ data, isSelected, onClick }) => {
       if (!bids || !asks || bids.length === 0 || asks.length === 0) return null;
 
       // Max depth size for normalization based on the visible range
-      // Using top 5 for calculation to keep bars relative to immediate liquidity displayed
       const depthViewSize = 5;
       const topBids = bids.slice(0, depthViewSize);
       const topAsks = asks.slice(0, depthViewSize);
 
-      const maxBid = Math.max(...topBids.map(b => b.sz));
-      const maxAsk = Math.max(...topAsks.map(a => a.sz));
+      const maxBid = Math.max(...topBids.map(b => b.sz), 0);
+      const maxAsk = Math.max(...topAsks.map(a => a.sz), 0);
       const overallMax = Math.max(maxBid, maxAsk) || 1; // Prevent div by zero
       
+      const bestBid = topBids[0]?.px || 0;
+      const bestAsk = topAsks[0]?.px || 0;
+      const spread = Math.abs(bestAsk - bestBid);
+      const spreadPct = bestBid > 0 ? (spread / bestBid) * 100 : 0;
+
       return (
           <div className="mt-3 pt-2 border-t border-hyper-border/50 animate-in fade-in">
-              <div className="flex items-center gap-1 text-[10px] text-hyper-muted mb-1 uppercase tracking-wider">
-                  <Layers size={10} /> Order Book Depth
+              <div className="flex justify-between items-center mb-1">
+                  <div className="flex items-center gap-1 text-[10px] text-hyper-muted uppercase tracking-wider">
+                      <Layers size={10} /> Order Book
+                  </div>
+                  <div className="text-[9px] font-mono text-slate-400">
+                      Spread: <span className="text-white">{spread.toFixed(2)}</span> ({spreadPct.toFixed(3)}%)
+                  </div>
               </div>
-              <div className="flex gap-1 h-10">
+
+              <div className="flex gap-1 h-12 relative">
                    {/* Bids (Green) - Right Aligned graphically towards center */}
                    <div className="flex-1 flex flex-col gap-[1px]">
                        {topBids.map((b, i) => (
-                           <div key={`bid-${i}`} className="flex-1 w-full flex justify-end">
+                           <div key={`bid-${i}`} className="flex-1 w-full flex justify-end group">
                                 <div 
-                                    className="bg-hyper-accent/30 rounded-sm transition-all duration-300" 
+                                    className="bg-hyper-accent/30 rounded-sm transition-all duration-300 group-hover:bg-hyper-accent/50" 
                                     style={{ width: `${(b.sz / overallMax) * 100}%`, height: '100%' }}
+                                    title={`Bid: ${b.sz.toFixed(2)} @ ${b.px}`}
                                 ></div>
                            </div>
                        ))}
@@ -57,18 +69,19 @@ const AssetCard: React.FC<Props> = ({ data, isSelected, onClick }) => {
                    {/* Asks (Red) - Left Aligned graphically away from center */}
                    <div className="flex-1 flex flex-col gap-[1px]">
                        {topAsks.map((a, i) => (
-                           <div key={`ask-${i}`} className="flex-1 w-full flex justify-start">
+                           <div key={`ask-${i}`} className="flex-1 w-full flex justify-start group">
                                 <div 
-                                    className="bg-hyper-danger/30 rounded-sm transition-all duration-300" 
+                                    className="bg-hyper-danger/30 rounded-sm transition-all duration-300 group-hover:bg-hyper-danger/50" 
                                     style={{ width: `${(a.sz / overallMax) * 100}%`, height: '100%' }}
+                                    title={`Ask: ${a.sz.toFixed(2)} @ ${a.px}`}
                                 ></div>
                            </div>
                        ))}
                    </div>
               </div>
               <div className="flex justify-between text-[9px] text-hyper-muted font-mono mt-1 px-1">
-                  <span className="text-hyper-accent/80">{topBids[0]?.px.toFixed(2) || '-'}</span>
-                  <span className="text-hyper-danger/80">{topAsks[0]?.px.toFixed(2) || '-'}</span>
+                  <span className="text-hyper-accent/90">{bestBid.toFixed(2)}</span>
+                  <span className="text-hyper-danger/90">{bestAsk.toFixed(2)}</span>
               </div>
           </div>
       )
